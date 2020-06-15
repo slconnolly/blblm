@@ -6,6 +6,17 @@
 \usage{
 blbcoef(fit)
 }
+\arguments{
+\item{fit}{a model, generally linear}
+}
+\value{
+the coefficient of the relationship between the variables in the
+original fit model
+}
 \description{
 compute the coefficients from fit
+}
+\examples{
+fit = blblm(Sepal.Width ~ Sepal.Length, data = iris, B = 10)
+blbcoef(fit)
 }

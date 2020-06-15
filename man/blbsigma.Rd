@@ -6,6 +6,12 @@
 \usage{
 blbsigma(fit)
 }
+\arguments{
+\item{fit}{a model, generally linear, to compute the sigma for}
+}
+\value{
+standard deviation
+}
 \description{
 compute sigma from fit
 }

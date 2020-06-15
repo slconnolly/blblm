@@ -1,0 +1,107 @@
+---
+title: "blblm_vignette"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{blblm_vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(blblm)
+```
+# Changes introduced to the BLBLM package
+
+Mainly, I wanted to allow for the user to be able to make use of parallel computing, use files of data instead of loading a dataset, and use a logistic regression model.
+
+The logistic regression was achieved by adding a new type of model option to the blblm function. We were given an `lm1()` function based on R's `lm()` function so I figured it would be best and most analogous to existing code to use the existing `glm()` function. I created `glm1()` to do that by calling `glm()` with `family = binomial`. Additionally, `glm1()` uses all the same arguments as `lm1()` which makes it easy to pass the same arguments to blblm, so the blblm function can specify the same arguments to each of its sub-functions. 
+
+The second feature added was making it possible for the user to provide filenames instead of loading a dataset or reading a file open before using the blblm function. It would be cumbersome to read in all the data inside each file, combine it, then randomly split the data based on the `m` argument of the blblm function. Instead, I changed the `data` argument of blblm to accommodate either a dataset or a vector of files.
+
+The data is already split if it is given in the form of multiple files. So in order to navigate these two requirements it was advisable to send files to different clusters. However, that would be extremely tedious. The BLBLM function does not provide data to each cluster. It provides file names to each core and the core reads in the data. Clustering speeds up analysis, and in the blblm function the clustering speeds up reading in the files as well as the analysis. If there is no parallelization, the data is read into a single core but still split up into the files it was in, it is not compended into a single file and split up over again.
+
+
+The third change I made was allowing parallelization. I added the `parallelization` argument to the `blblm()` function with a default value of `FALSE`. The package writer cannot know how many cores the user has available, so it was really important to me to allow the user to specify how many cores they wanted to have the program use. To do that, I added the `spec` argument to blblm as well.
+
+The clustering is defined not in the `blblm()` function itself but the `lm_each_subsample()` function. As a programming philosophy, clustering is reserved for the most time-consuming, memory-consuming tasks, and should be applied to only those tasks. Because `lm_each_subsample()` is the most expensive step, I defined the clustering there.
+
+
+# Introduction to BLBLM
+
+BLBLM stands for "Bag of little bootstraps linear models." It allows the user to perform a bootstrapping process while calculating the linear model of a dataset. Its exported functions are
+
+```
+blblm()
+print.blblm()
+sigma.blblm()
+coef.blblm()
+confint.blblm()
+predict.blblm()
+```
+
+and the ancillary, internal functions
+```
+split_data()
+lm_each_subsample()
+lm_each_boot()
+lm1()
+blbcoef()
+blbsigma()
+mean_lwr_upr()
+map_mean()
+map_cbind()
+map_rbind()
+```
+
+## Purpose
+
+Ultimately, its purpose is to bootstrap the linear model for a dataset or files of data. I have also added provisions for a logistic regression model, which I will discuss later. Additionally, the model can be distributed over clusters so as to speed up the modeling.
+
+## Arguments
+
+The main function is `blblm` whose arguments are
+```
+formula,
+data,
+m = 10,
+B = 5000,
+parallelization = FALSE,
+spec = 1,
+model_choice = "lm1"
+```
+I will discuss these each individually.
+
+**Formula:** This is the model that the user must choose, specifying the dependent and independent variables the user wishes to analyze.
+
+**Data:** The dataset in the form of a matrix or data frame.
+
+**m:** A numerical argument, this is the number of samples the user wishes to split the data into. The default is 10.
+
+**B:** A numerical argument, this is the number of bootstrap runs the user wishes to apply. Generally should be greater than a thousand but smaller numbers (such as I have put in my tests) run faster. The default is 5000.
+
+**parallelization:** A boolean argument, this allows the user to specify whether or not they wish to use parallel computing. The default is FALSE.
+
+**spec:** A numerical argument, this is the number of cores that the user wants the `blblm()` function to use. The default is 1.
+
+**model choice:** The user may choose between the default model, lm1, which is a bootstrapped linear model, or glm1, which is a bootstrapped general model which I have chosen to make logistic regression.
+
+
+## Basic Process
+
+the `blblm()` function calls the internal function `split_data()` to chunk the data into `m` number of subsets that it will use as subsamples, using map to apply the linear model (or logistic regression model) to each of them in turn using `lm_each_subsample()`.
+
+`lm_each_subsample()`  is an internal function where the decision whether or not to parallelize the computation is taken into account by the program. It applies `lm_each_boot()` to each cluster.
+
+`lm_each_boot()` is the last of these nested functions, and generates the weight (known as freqs in the function) afforded to each data point. It applies the formula and model (such as lm1, speed ~ dist) to each bootstrap. It also reads the csv files for data that isn't already loaded as a part of each bootstrap, instead of loading all the csv's first and then distributing the data to bootstraps.
+
+## Functions other than `blblm()`
+
+`print.blblm(), sigma.blblm()`, and `coef.blblm()` each do pretty much what they look like: they redefine the `print()`, `sigma`, and `coef` commands to work on an object of type blblm. `confint.blblm()` returns the confidence interval of a blblm object and `predict.blblm()` takes new data and applies the BLBLM generated coefficients to those data points to predict their values. 
+
